@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseConfig } from "./cfg.js";
-import type { Config, ManagedRecord, State } from "./types.js";
+import type { Config, DiscoveryResult, ManagedRecord, State } from "./types.js";
 import {
     fetchAllARecords,
     fetchAllZones,
@@ -17,20 +17,28 @@ import {
 } from "./utils.js";
 
 /**
- * Selects records once so unrelated records with coincidentally matching future IPs stay untouched.
+ * Rebuilds managed state from Cloudflare so deleted or manually changed records opt out safely.
  */
-async function bootstrapManagedRecords(
+async function discoverManagedRecords(
     config: Config,
-    currentIp: string,
-): Promise<ManagedRecord[]> {
+    expectedIp: string,
+    existingRecords: ManagedRecord[],
+): Promise<DiscoveryResult> {
     const zones = await fetchAllZones(config);
+    const existingRecordIds = new Set(existingRecords.map((record) => record.recordId));
     const managedRecords: ManagedRecord[] = [];
+    let addedCount = 0;
 
     for (const zone of zones) {
         const records = await fetchAllARecords(config, zone);
-        const matchingRecords = records.filter((record) => record.content === currentIp);
+        const matchingRecords = records.filter((record) => record.content === expectedIp);
 
         for (const record of matchingRecords) {
+            if (!existingRecordIds.has(record.id)) {
+                addedCount += 1;
+                console.log(`Discovered ${record.name}.`);
+            }
+
             managedRecords.push({
                 zoneId: record.zone_id,
                 zoneName: record.zone_name,
@@ -40,7 +48,11 @@ async function bootstrapManagedRecords(
         }
     }
 
-    return managedRecords;
+    return {
+        addedCount,
+        records: managedRecords,
+        removedCount: existingRecords.length + addedCount - managedRecords.length,
+    };
 }
 
 /**
@@ -73,12 +85,23 @@ async function updateRecords(
 
 async function runCycle(config: Config, state: State): Promise<State> {
     const currentIp = await fetchCurrentIp();
+    const discoveryIp = state.lastKnownIp ?? currentIp;
+    const discovery = await discoverManagedRecords(config, discoveryIp, state.records);
+    const records = discovery.records;
 
-    if (state.records.length === 0) {
-        const records = await bootstrapManagedRecords(config, currentIp);
-
+    if (state.records.length === 0 && records.length > 0) {
         console.log(`Bootstrapped ${records.length} managed A record(s) for ${currentIp}.`);
+    } else {
+        if (discovery.addedCount > 0) {
+            console.log(`Discovered ${discovery.addedCount} new managed A record(s).`);
+        }
 
+        if (discovery.removedCount > 0) {
+            console.log(`Removed ${discovery.removedCount} unmanaged A record(s) from state.`);
+        }
+    }
+
+    if (state.lastKnownIp === null) {
         return {
             lastKnownIp: currentIp,
             records,
@@ -87,16 +110,19 @@ async function runCycle(config: Config, state: State): Promise<State> {
 
     if (state.lastKnownIp === currentIp) {
         console.log(`Public IPv4 unchanged: ${currentIp}.`);
-        return state;
+        return {
+            lastKnownIp: currentIp,
+            records,
+        };
     }
 
     console.log(`Public IPv4 changed: ${state.lastKnownIp ?? "unknown"} -> ${currentIp}.`);
 
-    const records = await updateRecords(config, state, currentIp);
+    const updatedRecords = await updateRecords(config, { ...state, records }, currentIp);
 
     return {
         lastKnownIp: currentIp,
-        records,
+        records: updatedRecords,
     };
 }
 

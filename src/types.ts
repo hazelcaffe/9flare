@@ -56,6 +56,12 @@ export type State = {
     records: ManagedRecord[];
 };
 
+export type DiscoveryResult = {
+    records: ManagedRecord[];
+    addedCount: number;
+    removedCount: number;
+};
+
 export type PublicIpResponse = {
     ip: string;
 };
