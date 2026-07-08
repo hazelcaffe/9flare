@@ -1,0 +1,22 @@
+[
+    {
+        "label": "pnpm lint",
+        "command": "pnpm",
+        "args": ["lint"]
+    },
+    {
+        "label": "pnpm check",
+        "command": "pnpm",
+        "args": ["check"]
+    },
+    {
+        "label": "pnpm build",
+        "command": "pnpm",
+        "args": ["build"]
+    },
+    {
+        "label": "pnpm start",
+        "command": "pnpm",
+        "args": ["start"]
+    }
+]

@@ -1,0 +1,28 @@
+{
+    "name": "9flare",
+    "version": "0.1.0",
+    "description": "A small Cloudflare DDNS client for IPv4 A records.",
+    "license": "MIT",
+    "type": "module",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "lint": "biome lint .",
+        "lint:fix": "biome lint . --write",
+        "format": "biome format .",
+        "format:fix": "biome format . --write",
+        "check": "biome check .",
+        "check:fix": "biome check . --write",
+        "build": "tsc",
+        "start": "node dist/index.js"
+    },
+    "dependencies": {
+        "dotenv": "^17.2.0"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.1.1",
+        "@types/node": "^24.0.10",
+        "typescript": "^5.8.3"
+    }
+}
